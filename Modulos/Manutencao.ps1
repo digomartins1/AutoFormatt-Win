@@ -48,9 +48,10 @@ function Backup-Drivers {
     Clear-Host
     Write-Host "--- BACKUP DE DRIVERS DO SISTEMA ---" -ForegroundColor Green
     
-    $Pendrives = Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DriveType -eq 2 }
-    if ($Pendrives) {
-        $Destino = "$($Pendrives[0].DeviceID)\Drivers_Backup\$env:COMPUTERNAME"
+    # Busca USB (Pendrive ou HD Externo)
+    $DiscosUSB = Get-Disk -ErrorAction SilentlyContinue | Where-Object { $_.BusType -eq 'USB' } | Get-Partition | Get-Volume | Where-Object { $_.DriveLetter }
+    if ($DiscosUSB) {
+        $Destino = "$($DiscosUSB[0].DriveLetter):\Drivers_Backup\$env:COMPUTERNAME"
     } else {
         $Destino = "C:\Drivers_Backup_$env:COMPUTERNAME"
     }
@@ -58,8 +59,13 @@ function Backup-Drivers {
     Write-Host "Exportando drivers para: $Destino" -ForegroundColor Yellow
     if (-not (Test-Path $Destino)) { New-Item -Path $Destino -ItemType Directory -Force | Out-Null }
 
-    Export-WindowsDriver -Online -Destination $Destino
-    Write-Host "`n[OK] Drivers exportados com sucesso!" -ForegroundColor Green
+    try {
+        Export-WindowsDriver -Online -Destination $Destino
+        Write-Host "`n[OK] Drivers exportados com sucesso!" -ForegroundColor Green
+    } catch {
+        Write-Host "`n[ERRO] Falha ao exportar drivers: $($_.Exception.Message)" -ForegroundColor Red
+    }
+    
     Write-Host ""
     Pause
 }
@@ -94,16 +100,19 @@ function Limpeza-Profunda {
     Clear-Host
     Write-Host "--- LIMPEZA PROFUNDA DO SISTEMA ---" -ForegroundColor Green
     
-    Write-Host "Parando servico do Windows Update..." -ForegroundColor Gray
-    Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
+    Write-Host "Parando servicos do Windows Update..." -ForegroundColor Gray
+    Stop-Service -Name wuauserv, bits, cryptSvc -Force -ErrorAction SilentlyContinue
     
-    Write-Host "Limpando arquivos de atualizacoes antigas..." -ForegroundColor Yellow
+    # Aguarda liberacao dos bloqueios de arquivos
+    Start-Sleep -Seconds 2
+    
+    Write-Host "Limpando cache de atualizacoes antigas..." -ForegroundColor Yellow
     Remove-Item -Path "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -ErrorAction SilentlyContinue
     
-    Write-Host "Reiniciando servico do Windows Update..." -ForegroundColor Gray
-    Start-Service -Name wuauserv -ErrorAction SilentlyContinue
+    Write-Host "Reiniciando servicos..." -ForegroundColor Gray
+    Start-Service -Name wuauserv, bits, cryptSvc -ErrorAction SilentlyContinue
 
-    Write-Host "Limpando arquivos temporarios..." -ForegroundColor Yellow
+    Write-Host "Limpando arquivos temporarios do usuario e sistema..." -ForegroundColor Yellow
     Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item -Path "C:\Windows\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -128,11 +137,17 @@ function Gerenciar-Admin {
         Write-Host "`nUsuarios locais encontrados:" -ForegroundColor Cyan
         Get-LocalUser | Format-Table Name, Enabled, LastLogon -AutoSize
         
-        $UsuarioAlvo = Read-Host "Digite o nome do usuario para alterar a senha"
+        $UsuarioAlvo = Read-Host "Digite o nome do usuario exatamente como acima"
         $NovaSenha = Read-Host "Digite a nova senha"
         
-        net user $UsuarioAlvo $NovaSenha
-        Write-Host "`n[OK] Senha de '$UsuarioAlvo' redefinida com sucesso!" -ForegroundColor Green
+        # Aspas duplas obrigatorias para suportar espacos e caracteres especiais
+        net user "$UsuarioAlvo" "$NovaSenha"
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "`n[OK] Senha de '$UsuarioAlvo' redefinida com sucesso!" -ForegroundColor Green
+        } else {
+            Write-Host "`n[ERRO] Nao foi possivel alterar a senha." -ForegroundColor Red
+        }
     }
     Write-Host ""
     Pause
