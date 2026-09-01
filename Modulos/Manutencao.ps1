@@ -49,8 +49,8 @@ function Backup-Drivers {
     Write-Host "--- BACKUP DE DRIVERS DO SISTEMA ---" -ForegroundColor Green
     
     # Busca USB (Pendrive ou HD Externo)
-    $DiscosUSB = Get-Disk -ErrorAction SilentlyContinue | Where-Object { $_.BusType -eq 'USB' } | Get-Partition | Get-Volume | Where-Object { $_.DriveLetter }
-    if ($DiscosUSB) {
+    $DiscosUSB = @(Get-Disk -ErrorAction SilentlyContinue | Where-Object { $_.BusType -eq 'USB' } | Get-Partition | Get-Volume | Where-Object { $_.DriveLetter })
+    if ($DiscosUSB.Count -gt 0) {
         $Destino = "$($DiscosUSB[0].DriveLetter):\Drivers_Backup\$env:COMPUTERNAME"
     } else {
         $Destino = "C:\Drivers_Backup_$env:COMPUTERNAME"
@@ -103,7 +103,6 @@ function Limpeza-Profunda {
     Write-Host "Parando servicos do Windows Update..." -ForegroundColor Gray
     Stop-Service -Name wuauserv, bits, cryptSvc -Force -ErrorAction SilentlyContinue
     
-    # Aguarda liberacao dos bloqueios de arquivos
     Start-Sleep -Seconds 2
     
     Write-Host "Limpando cache de atualizacoes antigas..." -ForegroundColor Yellow
@@ -140,7 +139,6 @@ function Gerenciar-Admin {
         $UsuarioAlvo = Read-Host "Digite o nome do usuario exatamente como acima"
         $NovaSenha = Read-Host "Digite a nova senha"
         
-        # Aspas duplas obrigatorias para suportar espacos e caracteres especiais
         net user "$UsuarioAlvo" "$NovaSenha"
         
         if ($LASTEXITCODE -eq 0) {

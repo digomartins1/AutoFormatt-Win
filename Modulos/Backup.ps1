@@ -6,14 +6,14 @@
 
 function Obter-DispositivoUSB {
     # 1. Tenta detectar por barramento fisico USB (HDs Externos e SSDs USB)
-    $DiscosUSB = Get-Disk -ErrorAction SilentlyContinue | Where-Object { $_.BusType -eq 'USB' } | Get-Partition | Get-Volume | Where-Object { $_.DriveLetter }
-    if ($DiscosUSB) {
+    $DiscosUSB = @(Get-Disk -ErrorAction SilentlyContinue | Where-Object { $_.BusType -eq 'USB' } | Get-Partition | Get-Volume | Where-Object { $_.DriveLetter })
+    if ($DiscosUSB.Count -gt 0) {
         return "$($DiscosUSB[0].DriveLetter):"
     }
 
     # 2. Fallback para Pendrives tradicionais (DriveType 2)
-    $Pendrives = Get-CimInstance Win32_LogicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.DriveType -eq 2 }
-    if ($Pendrives) {
+    $Pendrives = @(Get-CimInstance Win32_LogicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.DriveType -eq 2 })
+    if ($Pendrives.Count -gt 0) {
         return $Pendrives[0].DeviceID
     }
 
@@ -81,7 +81,6 @@ function Iniciar-AutoBackup {
 
             if (Test-Path $CaminhoOrigemPasta) {
                 Write-Host "  -> Copiando $Pasta..." -ForegroundColor Gray
-                # Multithread ultra rapido com exclusao de junctions (/XJ)
                 robocopy $CaminhoOrigemPasta $CaminhoDestinoPasta /E /R:1 /W:1 /MT:8 /XJ /NP | Out-Null
                 
                 if ($LASTEXITCODE -ge 8) {

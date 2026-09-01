@@ -4,11 +4,13 @@
 ==============================================================================
 #>
 
-# Carrega todos os modulos se estiver rodando localmente
-if (Test-Path "$PSScriptRoot\Modulos\Backup.ps1")    { . "$PSScriptRoot\Modulos\Backup.ps1" }
-if (Test-Path "$PSScriptRoot\Modulos\Manutencao.ps1"){ . "$PSScriptRoot\Modulos\Manutencao.ps1" }
-if (Test-Path "$PSScriptRoot\Modulos\Deploy.ps1")    { . "$PSScriptRoot\Modulos\Deploy.ps1" }
-if (Test-Path "$PSScriptRoot\Modulos\Captura.ps1")   { . "$PSScriptRoot\Modulos\Captura.ps1" }
+# Carrega todos os modulos se estiver rodando localmente a partir de arquivos fisicos
+if ($PSScriptRoot) {
+    if (Test-Path "$PSScriptRoot\Modulos\Backup.ps1")    { . "$PSScriptRoot\Modulos\Backup.ps1" }
+    if (Test-Path "$PSScriptRoot\Modulos\Manutencao.ps1"){ . "$PSScriptRoot\Modulos\Manutencao.ps1" }
+    if (Test-Path "$PSScriptRoot\Modulos\Deploy.ps1")    { . "$PSScriptRoot\Modulos\Deploy.ps1" }
+    if (Test-Path "$PSScriptRoot\Modulos\Captura.ps1")   { . "$PSScriptRoot\Modulos\Captura.ps1" }
+}
 
 # 1. TAMANHO INICIAL PADRAO (JANELA NO CENTRO DO MONITOR)
 $CodigoCsharp = @"
@@ -41,10 +43,10 @@ try {
     }
 } catch {}
 
-# 2. CONFIGURACOES VISUAIS E PROTOCOLO
+# 2. CONFIGURACOES VISUAIS E PROTOCOLO (UTF-8)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
-[Console]::OutputEncoding = [System.Text.Encoding]::ASCII
-$OutputEncoding = [System.Text.Encoding]::ASCII
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 $Host.UI.RawUI.WindowTitle = "AutoFormatt-Win GOLD V2.0"
 $Host.UI.RawUI.BackgroundColor = "Black"
 $Host.UI.RawUI.ForegroundColor = "White"

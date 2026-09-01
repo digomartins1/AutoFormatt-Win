@@ -1,6 +1,8 @@
-# ==============================================================================
-# CARREGADOR 100% EM MEMORIA RAM COM TODOS OS MODULOS
-# ==============================================================================
+<#
+==============================================================================
+  CARREGADOR 100% EM MEMORIA RAM COM TODOS OS MODULOS
+==============================================================================
+#>
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 
 $Usuario = "digomartins1"

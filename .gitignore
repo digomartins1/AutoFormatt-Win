@@ -7,6 +7,7 @@
 *.vhd
 *.vhdx
 Imagens/
+Imagens_Capturadas/
 
 # ==============================================================================
 # PASTAS DE BACKUPS E DADOS DE CLIENTES

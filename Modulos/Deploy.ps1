@@ -8,12 +8,17 @@ function Localizar-ArquivoImagem {
     param ([string]$NomePasta)
     
     $PastasBusca = @(
-        "$PSScriptRoot\..\Imagens\$NomePasta",
-        "$PSScriptRoot\Imagens\$NomePasta",
-        "C:\Imagens\$NomePasta"
+        "C:\Imagens\$NomePasta",
+        "D:\Imagens\$NomePasta",
+        "E:\Imagens\$NomePasta"
     )
 
-    $DiscosUSB = Get-Disk -ErrorAction SilentlyContinue | Where-Object { $_.BusType -eq 'USB' } | Get-Partition | Get-Volume | Where-Object { $_.DriveLetter }
+    if ($PSScriptRoot) {
+        $PastasBusca += "$PSScriptRoot\..\Imagens\$NomePasta"
+        $PastasBusca += "$PSScriptRoot\Imagens\$NomePasta"
+    }
+
+    $DiscosUSB = @(Get-Disk -ErrorAction SilentlyContinue | Where-Object { $_.BusType -eq 'USB' } | Get-Partition | Get-Volume | Where-Object { $_.DriveLetter })
     foreach ($d in $DiscosUSB) {
         $PastasBusca += "$($d.DriveLetter):\Imagens\$NomePasta"
         $PastasBusca += "$($d.DriveLetter):\$NomePasta"
@@ -61,8 +66,10 @@ function Iniciar-DeployWindows {
 
     if ($CaminhoImagem.EndsWith(".iso", [System.StringComparison]::OrdinalIgnoreCase)) {
         Write-Host "  -> Montando arquivo ISO..." -ForegroundColor Gray
-        $IsoMontada = Mount-DiskImage -ImagePath $CaminhoImagem -PassThru
-        $DriveIso = ($IsoMontada | Get-Volume).DriveLetter + ":"
+        Mount-DiskImage -ImagePath $CaminhoImagem | Out-Null
+        Start-Sleep -Seconds 1
+        
+        $DriveIso = (Get-DiskImage -ImagePath $CaminhoImagem | Get-Volume).DriveLetter + ":"
         $MontouIso = $true
 
         if (Test-Path "$DriveIso\sources\install.wim") {
@@ -120,8 +127,8 @@ function Iniciar-DeployWindows {
         Clear-Disk -Number $DiscoNum -RemoveData -RemoveOEM -Confirm:$false
         Initialize-Disk -Number $DiscoNum -PartitionStyle GPT
 
-        # EFI Boot (100MB FAT32)
-        $PartEFI = New-Partition -DiskNumber $DiscoNum -Size 100MB -GptType "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}"
+        # EFI Boot (100MB FAT32 com letra temporaria S:)
+        $PartEFI = New-Partition -DiskNumber $DiscoNum -Size 100MB -DriveLetter 'S' -GptType "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}"
         Format-Volume -Partition $PartEFI -FileSystem FAT32 -NewFileSystemLabel "System" | Out-Null
         
         # MSR (16MB)
@@ -149,23 +156,34 @@ function Iniciar-DeployWindows {
         return
     }
 
-    # Bootloader UEFI
-    Write-Host "  -> Gravando arquivos de inicializacao UEFI (BCDBoot)..." -ForegroundColor Gray
-    bcdboot.exe "$LetraWin\Windows" /s "$LetraWin" /f ALL | Out-Null
+    # Bootloader UEFI gravado na particao EFI (S:)
+    Write-Host "  -> Gravando arquivos de inicializacao UEFI (BCDBoot na particao EFI)..." -ForegroundColor Gray
+    bcdboot.exe "$LetraWin\Windows" /s S: /f UEFI | Out-Null
 
-    # Bypass de requisitos do Windows 11
+    # Remove a letra de unidade da particao EFI
+    Remove-PartitionAccessPath -DiskNumber $DiscoNum -PartitionNumber $PartEFI.PartitionNumber -Accesspath "S:\" -ErrorAction SilentlyContinue
+
+    # Bypass de requisitos do Windows 11 + Conta Microsoft / Internet
     if ($BypassRequisitosWin11) {
-        Write-Host "  -> Aplicando bypass de requisitos do Windows 11 (TPM / RAM / Conta MS)..." -ForegroundColor Green
-        $RegPath = "$LetraWin\Windows\System32\config\SYSTEM"
-        if (Test-Path $RegPath) {
-            reg load HKLM\TEMP_SYSTEM $RegPath | Out-Null
-            New-Item -Path "HKLM:\TEMP_SYSTEM\Setup\LabConfig" -Force | Out-Null
-            Set-ItemProperty -Path "HKLM:\TEMP_SYSTEM\Setup\LabConfig" -Name "BypassTPMCheck" -Value 1 -Type DWord
-            Set-ItemProperty -Path "HKLM:\TEMP_SYSTEM\Setup\LabConfig" -Name "BypassSecureBootCheck" -Value 1 -Type DWord
-            Set-ItemProperty -Path "HKLM:\TEMP_SYSTEM\Setup\LabConfig" -Name "BypassRAMCheck" -Value 1 -Type DWord
-            Set-ItemProperty -Path "HKLM:\TEMP_SYSTEM\Setup\LabConfig" -Name "BypassCPUCheck" -Value 1 -Type DWord
-            Set-ItemProperty -Path "HKLM:\TEMP_SYSTEM\Setup\LabConfig" -Name "BypassStorageCheck" -Value 1 -Type DWord
-            reg unload HKLM\TEMP_SYSTEM | Out-Null
+        Write-Host "  -> Aplicando bypass de requisitos (TPM / CPU / RAM / SecureBoot)..." -ForegroundColor Green
+        $RegSys = "$LetraWin\Windows\System32\config\SYSTEM"
+        if (Test-Path $RegSys) {
+            reg.exe load HKLM\TEMP_SYSTEM $RegSys | Out-Null
+            reg.exe add "HKLM\TEMP_SYSTEM\Setup\LabConfig" /v "BypassTPMCheck" /t REG_DWORD /d 1 /f | Out-Null
+            reg.exe add "HKLM\TEMP_SYSTEM\Setup\LabConfig" /v "BypassSecureBootCheck" /t REG_DWORD /d 1 /f | Out-Null
+            reg.exe add "HKLM\TEMP_SYSTEM\Setup\LabConfig" /v "BypassRAMCheck" /t REG_DWORD /d 1 /f | Out-Null
+            reg.exe add "HKLM\TEMP_SYSTEM\Setup\LabConfig" /v "BypassCPUCheck" /t REG_DWORD /d 1 /f | Out-Null
+            reg.exe add "HKLM\TEMP_SYSTEM\Setup\LabConfig" /v "BypassStorageCheck" /t REG_DWORD /d 1 /f | Out-Null
+            reg.exe add "HKLM\TEMP_SYSTEM\Setup\MoSetup" /v "AllowUpgradesWithUnsupportedTPMOrCPU" /t REG_DWORD /d 1 /f | Out-Null
+            reg.exe unload HKLM\TEMP_SYSTEM | Out-Null
+        }
+
+        Write-Host "  -> Aplicando bypass de Conta Microsoft e Internet OOBE (BypassNRO)..." -ForegroundColor Green
+        $RegSoft = "$LetraWin\Windows\System32\config\SOFTWARE"
+        if (Test-Path $RegSoft) {
+            reg.exe load HKLM\TEMP_SOFTWARE $RegSoft | Out-Null
+            reg.exe add "HKLM\TEMP_SOFTWARE\Microsoft\Windows\CurrentVersion\OOBE" /v "BypassNRO" /t REG_DWORD /d 1 /f | Out-Null
+            reg.exe unload HKLM\TEMP_SOFTWARE | Out-Null
         }
     }
 
